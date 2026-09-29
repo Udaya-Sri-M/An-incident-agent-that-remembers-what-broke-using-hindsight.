@@ -1,0 +1,57 @@
+[
+  {
+    "id": "INC-1042",
+    "date": "2026-07-11",
+    "service": "checkout-api",
+    "severity": "SEV-1",
+    "symptoms": "POST /checkout returns 502 for about 35% of requests after a traffic spike.",
+    "root_cause": "The database connection pool was exhausted because the checkout API opened long-lived connections during a retry storm.",
+    "fix": "Reduced retry fan-out, capped connection lifetime, and increased the pool from 40 to 80.",
+    "resolution_minutes": 47,
+    "lesson": "When checkout traffic spikes, check DB pool saturation before changing application logic."
+  },
+  {
+    "id": "INC-1098",
+    "date": "2026-07-29",
+    "service": "checkout-api",
+    "severity": "SEV-2",
+    "symptoms": "Intermittent 502s on checkout; database connections climb to the configured maximum.",
+    "root_cause": "A retry loop in the payment client amplified failed requests and consumed the DB connection pool.",
+    "fix": "Added exponential backoff, limited retries to two attempts, and raised the pool limit.",
+    "resolution_minutes": 31,
+    "lesson": "A retry storm can look like a database failure even when the database itself is healthy."
+  },
+  {
+    "id": "INC-1121",
+    "date": "2026-08-06",
+    "service": "auth-service",
+    "severity": "SEV-1",
+    "symptoms": "Users are repeatedly logged out after a deployment; token refresh requests return 401.",
+    "root_cause": "The new token refresh code used a different signing-key version than the session middleware.",
+    "fix": "Aligned key-version configuration and added an integration test covering refresh across deployments.",
+    "resolution_minutes": 54,
+    "lesson": "Authentication changes must be checked together with session middleware and key-version configuration."
+  },
+  {
+    "id": "INC-1164",
+    "date": "2026-08-19",
+    "service": "catalog-api",
+    "severity": "SEV-2",
+    "symptoms": "Product search latency jumps from 180ms to more than 2 seconds after a catalog import.",
+    "root_cause": "The import created a large number of unindexed rows used by the search query.",
+    "fix": "Added the missing composite index and moved the import to a staged process.",
+    "resolution_minutes": 39,
+    "lesson": "After bulk catalog changes, inspect query plans and indexes before increasing compute."
+  },
+  {
+    "id": "INC-1190",
+    "date": "2026-09-02",
+    "service": "notification-worker",
+    "severity": "SEV-2",
+    "symptoms": "Email notifications are delayed by 20–30 minutes while the worker queue keeps growing.",
+    "root_cause": "A provider timeout caused each job to be retried synchronously, reducing worker throughput.",
+    "fix": "Moved retries to delayed jobs, added a timeout budget, and increased worker concurrency.",
+    "resolution_minutes": 28,
+    "lesson": "Synchronous retries can turn a provider timeout into a queue backlog."
+  }
+]

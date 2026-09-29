@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>RETRACE — Incident Memory Agent</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="brand">RETRACE</div>
+      <div class="tagline">Incident memory that doesn't start from zero.</div>
+    </div>
+    <div class="pill">Hindsight • Retain → Recall</div>
+  </header>
+
+  <main class="shell">
+    <section class="hero">
+      <div>
+        <span class="eyebrow">MEMORY-DRIVEN INCIDENT RESPONSE</span>
+        <h1>We've seen this before.</h1>
+        <p>RETRACE remembers past incidents, their root causes, fixes and lessons — then uses that history when a new problem arrives.</p>
+      </div>
+      <div class="hero-stat"><strong id="incidentCount">5</strong><span>demo incidents</span></div>
+    </section>
+
+    <section class="grid">
+      <div class="panel input-panel">
+        <div class="panel-head">
+          <div><h2>New incident</h2><p>Try the same problem cold, then with memory.</p></div>
+          <div class="status" id="status">Ready</div>
+        </div>
+        <textarea id="incident" placeholder="Example: checkout-api is returning 502s after a traffic spike. Database connections are at the maximum and retries are increasing..."></textarea>
+        <div class="actions">
+          <button class="secondary" onclick="analyze('cold')">Run cold</button>
+          <button class="primary" onclick="analyze('memory')">Run with Hindsight</button>
+        </div>
+        <div class="hint">Tip: use the demo incident below for a guaranteed match.</div>
+      </div>
+
+      <div class="panel answer-panel">
+        <div class="panel-head"><div><h2>Agent response</h2><p id="responseMeta">No analysis yet</p></div></div>
+        <pre id="answer">Run an incident to see what RETRACE knows.</pre>
+      </div>
+    </section>
+
+    <section class="panel matches-panel">
+      <div class="panel-head">
+        <div><h2>Hindsight evidence</h2><p>These are the memories retrieved for the current incident.</p></div>
+        <button class="secondary small" onclick="seed()">Load / refresh demo memory</button>
+      </div>
+      <div id="matches" class="matches empty">No memories retrieved yet.</div>
+    </section>
+
+    <section class="panel history-panel">
+      <div class="panel-head"><div><h2>Retained incident history</h2><p>The demo dataset that gets stored in Hindsight.</p></div></div>
+      <div class="cards">
+        {% for i in incidents %}
+        <button class="incident-card" onclick='useIncident({{ i | tojson }})'>
+          <div class="card-top"><span>{{ i.id }}</span><span>{{ i.date }}</span></div>
+          <h3>{{ i.service }}</h3>
+          <p>{{ i.symptoms }}</p>
+          <div class="card-bottom"><span>{{ i.severity }}</span><span>{{ i.resolution_minutes }} min</span></div>
+        </button>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="flow">
+      <div><span>1</span><strong>Retain</strong><small>Every resolved incident becomes experience.</small></div>
+      <div><span>2</span><strong>Recall</strong><small>Find relevant past failures.</small></div>
+      <div><span>3</span><strong>Ground</strong><small>Groq turns memory into a concise recommendation.</small></div>
+      <div><span>4</span><strong>Learn</strong><small>The next resolved incident becomes memory too.</small></div>
+    </section>
+  </main>
+
+<script>
+function setStatus(text){ document.getElementById('status').textContent = text; }
+function useIncident(i){
+  document.getElementById('incident').value = `Service: ${i.service}\nSymptoms: ${i.symptoms}`;
+  setStatus('Incident loaded');
+}
+async function seed(){
+  setStatus('Retaining incidents…');
+  const r = await fetch('/api/seed',{method:'POST'});
+  const data = await r.json();
+  setStatus(data.ok ? `Retained ${data.retained.length} incidents` : 'Seed failed');
+}
+async function analyze(mode){
+  const incident = document.getElementById('incident').value.trim();
+  if(!incident){ alert('Enter an incident first.'); return; }
+  setStatus(mode === 'cold' ? 'Running without memory…' : 'Recalling Hindsight…');
+  document.getElementById('answer').textContent = 'Analyzing…';
+  document.getElementById('matches').innerHTML = '<div class="loading">Searching memory…</div>';
+  const r = await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({incident,mode})});
+  const data = await r.json();
+  if(data.error){ document.getElementById('answer').textContent=data.error; return; }
+  document.getElementById('answer').textContent = data.answer;
+  document.getElementById('responseMeta').textContent = data.message;
+  setStatus(mode === 'cold' ? 'Cold run complete' : 'Memory run complete');
+  const box = document.getElementById('matches');
+  if(!data.matches.length){ box.className='matches empty'; box.textContent='No historical memories were used.'; return; }
+  box.className='matches';
+  box.innerHTML = data.matches.map((m,idx)=>`<article class="memory"><div class="memory-top"><span>MEMORY ${idx+1}</span><span>${escapeHtml(m.type)}</span></div><p>${escapeHtml(m.text)}</p></article>`).join('');
+}
+function escapeHtml(s){ return s.replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
+</script>
+</body>
+</html>
